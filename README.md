@@ -1,10 +1,17 @@
 # How to compile
-To compile:
+- Compile:
 ```bash
-make -C /usr/src/linux-headers-(uname -r) M=(pwd) modules
+make
 ```
-To clean:
+- Load the module:
 ```bash
-make -C /usr/src/linux-headers-(uname -r) M=(pwd) clean
+sudo make load
 ```
-Note: Above commands is writen in fish style, if you use built in bash, you should change (uname -r) to \`uname -r\` and (pwd) to \`pwd\`
+- Unload the module:
+```bash
+sudo make unload
+```
+- Clean:
+```bash
+make clean
+```

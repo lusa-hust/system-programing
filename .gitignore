@@ -1,2 +1,9 @@
 .idea/
 
+*.cmd
+.tmp_versions/
+*.symvers
+*.ko
+*.mod.c
+*.o
+*.order
