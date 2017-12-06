@@ -1,4 +1,4 @@
-TARGET_MODULE:=main
+TARGET_MODULE:=ebbchar
 BUILDSYSTEM_DIR:=/usr/src/linux-headers-$(shell uname -r)
 PWD:=$(shell pwd)
 MAKE:=make
