@@ -7,6 +7,7 @@
 #include <linux/fs.h>
 #include <linux/uaccess.h>
 #include <linux/err.h>
+#include <linux/mutex.h>
 
 #define  DEVICE_NAME "ebbchar"
 #define  CLASS_NAME  "ebb"
@@ -29,6 +30,12 @@ static int     dev_release(struct inode *, struct file *);
 static ssize_t dev_read(struct file *, char *, size_t, loff_t *);
 static ssize_t dev_write(struct file *, const char *, size_t, loff_t *);
 
+/// A macro that is used to declare a new mutex that is visible in this file
+/// results in a semaphore variable ebbchar_mutex with value 1 (unlocked)
+/// DEFINE_MUTEX_LOCKED() results in a variable with value 0 (locked)
+static DEFINE_MUTEX(ebbchar_mutex);
+
+
 /** @brief Devices are represented as file structure in the kernel. The file_operations structure from
  *  /linux/fs.h lists the callback functions that you wish to associated with your file operations
  *  using a C99 syntax structure. char devices usually implement open, read, write and release calls
@@ -49,6 +56,7 @@ static struct file_operations fops =
  *  @return returns 0 if successful
  */
 static int __init ebbchar_init(void){
+    mutex_init(&ebbchar_mutex);       /// Initialize the mutex lock dynamically at runtime
     printk(KERN_INFO "EBBChar: Initializing the EBBChar LKM\n");
 
     // Try to dynamically allocate a major number for the device -- more difficult but worth it
@@ -85,6 +93,7 @@ static int __init ebbchar_init(void){
  *  code is used for a built-in driver (not a LKM) that this function is not required.
  */
 static void __exit ebbchar_exit(void){
+    mutex_destroy(&ebbchar_mutex);        /// destroy the dynamically-allocated mutex
     device_destroy(ebbcharClass, MKDEV(majorNumber, 0));     // remove the device
     class_unregister(ebbcharClass);                          // unregister the device class
     class_destroy(ebbcharClass);                             // remove the device class
@@ -98,6 +107,11 @@ static void __exit ebbchar_exit(void){
  *  @param filep A pointer to a file object (defined in linux/fs.h)
  */
 static int dev_open(struct inode *inodep, struct file *filep){
+    if(!mutex_trylock(&ebbchar_mutex)){    /// Try to acquire the mutex (i.e., put the lock on/down)
+        /// returns 1 if successful and 0 if there is contention
+        printk(KERN_ALERT "EBBChar: Device in use by another process");
+        return -EBUSY;
+    }
     numberOpens++;
     printk(KERN_INFO "EBBChar: Device has been opened %d time(s)\n", numberOpens);
     return 0;
@@ -147,6 +161,7 @@ static ssize_t dev_write(struct file *filep, const char *buffer, size_t len, lof
  *  @param filep A pointer to a file object (defined in linux/fs.h)
  */
 static int dev_release(struct inode *inodep, struct file *filep){
+    mutex_unlock(&ebbchar_mutex);          /// Releases the mutex (i.e., the lock goes up)
     printk(KERN_INFO "EBBChar: Device successfully closed\n");
     return 0;
 }
