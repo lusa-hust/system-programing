@@ -8,6 +8,7 @@
 #include <linux/uaccess.h>
 #include <linux/err.h>
 #include <linux/mutex.h>
+#include <asm-generic/current.h>
 
 #define  DEVICE_NAME "ebbchar"
 #define  CLASS_NAME  "ebb"
@@ -114,6 +115,7 @@ static int dev_open(struct inode *inodep, struct file *filep){
     }
     numberOpens++;
     printk(KERN_INFO "EBBChar: Device has been opened %d time(s)\n", numberOpens);
+    printk(KERN_INFO "Device is opened by process id %d\n", get_current()->pid);
     return 0;
 }
 
