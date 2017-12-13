@@ -24,6 +24,7 @@ static short  size_of_message;              ///< Used to remember the size of th
 static int    numberOpens = 0;              ///< Counts the number of times the device is opened
 static struct class*  ebbcharClass  = NULL; ///< The device-driver class struct pointer
 static struct device* ebbcharDevice = NULL; ///< The device-driver device struct pointer
+static int    number;                       ///< The number to be stored
 
 // The prototype functions for the character driver -- must come before the struct definition
 static int     dev_open(struct inode *, struct file *);
@@ -130,7 +131,7 @@ static int dev_open(struct inode *inodep, struct file *filep){
 static ssize_t dev_read(struct file *filep, char *buffer, size_t len, loff_t *offset){
     int error_count = 0;
     // copy_to_user has the format ( * to, *from, size) and returns 0 on success
-    error_count = copy_to_user(buffer, message, size_of_message);
+    error_count = copy_to_user((int *) buffer, &number, sizeof(int));
 
     if (error_count==0){            // if true then have success
         printk(KERN_INFO "EBBChar: Sent %d characters to the user\n", size_of_message);
@@ -151,9 +152,10 @@ static ssize_t dev_read(struct file *filep, char *buffer, size_t len, loff_t *of
  *  @param offset The offset if required
  */
 static ssize_t dev_write(struct file *filep, const char *buffer, size_t len, loff_t *offset){
-    sprintf(message, "%s(%zu letters)", buffer, len);   // appending received string with its length
-    size_of_message = strlen(message);                 // store the length of the stored message
-    printk(KERN_INFO "EBBChar: Received %zu characters from the user\n", len);
+    // sprintf(message, "%s(%zu letters)", buffer, len);   // appending received string with its length
+    // size_of_message = strlen(message);                 // store the length of the stored message
+    number = *(int *) buffer;
+    printk(KERN_INFO "EBBChar: Received %d from the user\n", number);
     return len;
 }
 
