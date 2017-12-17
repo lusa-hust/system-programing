@@ -1,4 +1,4 @@
-TARGET_MODULE:=ebbchar
+TARGET_MODULE:=ictRedis
 BUILDSYSTEM_DIR:=/usr/src/linux-headers-$(shell uname -r)
 PWD:=$(shell pwd)
 MAKE:=make

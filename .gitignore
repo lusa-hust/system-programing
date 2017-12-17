@@ -1,5 +1,5 @@
 .idea/
-
+cmake-build-debug/
 *.cmd
 .tmp_versions/
 *.symvers
