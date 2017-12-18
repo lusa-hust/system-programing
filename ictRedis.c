@@ -186,7 +186,7 @@ static ssize_t dev_read(struct file *filep, char *buffer, size_t len, loff_t *of
     for (index = 0; index <= max_index; index++) {
         if (strcmp(array[index].key, requestKey) == 0)
 
-            error_count = copy_to_user((int *) buffer, array[index].value, strlen(array[index].value));
+            error_count = copy_to_user((int *) buffer, array[index].value, strlen(array[index].value)+1);
 
         if (error_count == 0) {            // if true then have success
             printk(KERN_INFO "ICTRedis: request key : %s found with value \n", array[index].key, array[index].value);
@@ -223,7 +223,7 @@ static ssize_t dev_write(struct file *filep, const char *buffer, size_t len, lof
         return -1;
     }
     char *orgString = string;
-    char *mode, *message;
+    char *mode;
     strcpy(string, buffer);
 
     mode = strsep(&string, "|");
@@ -243,8 +243,7 @@ static ssize_t dev_write(struct file *filep, const char *buffer, size_t len, lof
         kfree(orgString);
         return len;
     } else if (modeWrite == GET) {
-        message = strsep(&string, "|");
-        strcpy(requestKey, message);
+        strcpy(requestKey, string);
         printk(KERN_INFO "ICTRedis: Received request key: %s from the user\n", requestKey);
         kfree(orgString);
         return len;

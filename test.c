@@ -37,9 +37,11 @@ int main(){
 
     // main loop
     while(1) {
+        printf("\n\n");
         printf("+==================================================+\n");
         printf("| 1. Write a key-value                             |\n");
-        printf("| 2. Exit                                          |\n");
+        printf("| 2. Read a key                                    |\n");
+        printf("| 3. Exit                                          |\n");
         printf("+==================================================+\n");
         printf("Choose an action: ");
         scanf("%d", &action);
@@ -52,15 +54,29 @@ int main(){
                 scanf("%s", value);
                 // compose the message to send to the device
                 snprintf(buffer, 110, "%d|%s|%s", PUSH, key, value);
-                printf("%s\n", buffer);
                 ret = write(fd, buffer, strlen(buffer));
                 if (ret < 0){
                     perror("Failed to write the message to the device.");
                     return errno;
                 }
+                printf("Written successfully\n");
             break;
 
             case 2:
+                printf("Enter the key you want to read: ");
+                scanf("%s", key);
+                snprintf(buffer, 110, "%d|%s", GET, key);
+                ret = write(fd, buffer, strlen(buffer));
+                if (ret < 0){
+                    perror("Failed to write the message to the device.");
+                    return errno;
+                }
+                // now read
+                read(fd, value, 50);
+                printf("Read: %s\n", value);
+            break;
+
+            case 3:
                 printf("Exit\n");
                 close(fd);
                 exit(1);
