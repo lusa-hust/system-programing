@@ -9,9 +9,9 @@
 #include <linux/err.h>
 #include <linux/mutex.h>
 #include <asm-generic/current.h>
-
-
-#include <stdlib.h>
+#include <linux/string.h>
+#include <linux/sched.h>
+#include <linux/vmalloc.h>
 
 #define  DEVICE_NAME "ictredis"
 #define  CLASS_NAME  "ict"
@@ -59,7 +59,9 @@ static ssize_t dev_write(struct file *, const char *, size_t, loff_t *);
 
 static Element create_elemet(char *string);
 
+static int my_atoi(char * string);
 
+static int isNumericChar(char x);
 /// A macro that is used to declare a new mutex that is visible in this file
 /// results in a semaphore variable ICTRedis_mutex with value 1 (unlocked)
 /// DEFINE_MUTEX_LOCKED() results in a variable with value 0 (locked)
@@ -149,7 +151,7 @@ static int dev_open(struct inode *inodep, struct file *filep) {
     }
     numberOpens++;
     printk(KERN_INFO "ICTRedis: Device has been opened %d time(s)\n", numberOpens);
-    printk(KERN_INFO "Device is opened by process id %d\n", get_current()->pid);
+//+-
     return 0;
 }
 
@@ -163,7 +165,7 @@ static int dev_open(struct inode *inodep, struct file *filep) {
  */
 static ssize_t dev_read(struct file *filep, char *buffer, size_t len, loff_t *offset) {
     int error_count = 0;
-
+    int index;
 
     if (max_index < 0 || modeWrite != GET) {
         // copy_to_user has the format ( * to, *from, size) and returns 0 on success
@@ -178,7 +180,7 @@ static ssize_t dev_read(struct file *filep, char *buffer, size_t len, loff_t *of
         return 0;  // clear the position to the start and return 0
     }
 
-    int index;
+
 
     for (index = 0; index <= max_index; index++) {
         if (strcmp(array[index].key, requestKey) == 0)
@@ -212,28 +214,39 @@ static ssize_t dev_write(struct file *filep, const char *buffer, size_t len, lof
     // sprintf(message, "%s(%zu letters)", buffer, len);   // appending received string with its length
     // size_of_message = strlen(message);                 // store the length of the stored message
 
-    char *pt;
-    pt = strtok(buffer, "|");
-    int count = 0;
-    while (pt != NULL) {
-        if (count == 0) {
-            modeWrite = (ModeWrite) atoi(pt);
-            count++;
-        } else {
-            if (modeWrite == PUSH) {
-                Element e = create_elemet(pt);
-                array[max_index + 1] = e;
-                max_index++;
-                printk(KERN_INFO "ICTRedis: Received key: %s |value: %s from the user\n", e.key, e.value);
-                return len;
-            } else if (modeWrite == GET) {
-                strcpy(requestKey, pt);
-                printk(KERN_INFO "ICTRedis: Received request key: %s from the user\n", requestKey);
-                return len;
-            }
+    char *string = (char *) vmalloc(len);
+    char *orgString = string;
+    char *mode, *message;
+    strcpy(string, buffer);
+
+
+
+
+    mode = strsep(&string, "|");
+
+    modeWrite = (ModeWrite) my_atoi(mode);
+
+    message = strsep(&string, "|");
+
+    if (modeWrite == PUSH) {
+        Element e = create_elemet(message);
+
+        if(max_index + 1 > MAX_ELEMENT) {
+            max_index = -1;
         }
-        pt = strtok(NULL, ",");
+
+        array[max_index + 1] = e;
+        max_index++;
+        printk(KERN_INFO "ICTRedis: Received key: %s |value: %s from the user\n", e.key, e.value);
+        vfree(orgString);
+        return len;
+    } else if (modeWrite == GET) {
+        strcpy(requestKey, message);
+        printk(KERN_INFO "ICTRedis: Received request key: %s from the user\n", requestKey);
+        vfree(orgString);
+        return len;
     }
+
 
     printk(KERN_ALERT "ICTRedis: Write error \n", requestKey);
     return 0;  // clear the position to the start and return 0
@@ -254,19 +267,57 @@ static int dev_release(struct inode *inodep, struct file *filep) {
 // take string "key|value" to create element
 static Element create_elemet(char *string) {
     Element ret;
-    char *pt;
-    pt = strtok(string, "|");
-    int count = 0;
-    while (pt != NULL) {
-        if (count == 0) {
-            strcpy(ret.key, pt);
-            count++;
-        } else {
-            strcpy(ret.value, pt);
-        }
-        pt = strtok(NULL, ",");
-    }
+    char *key, *value;
+    size_t len = strlen(string);
+    char *buff = (char *) vmalloc(len);
+    char *orgBuff = buff;
+    strcpy(buff, string);
+
+
+
+
+    key = strsep(&buff, "|");
+
+    value = strsep(&buff, "|");
+
+    strcpy(ret.key, key);
+    strcpy(ret.value, value);
+
+    vfree(orgBuff);
     return ret;
+}
+
+static int my_atoi(char * string){
+    int res = 0;  // Initialize result
+    int sign = 1;  // Initialize sign as positive
+    int i = 0;  // Initialize index of first digit
+    if (string == NULL)
+        return 0;
+
+
+
+    // If number is negative, then update sign
+    if (string[0] == '-')
+    {
+        sign = -1;
+        i++;  // Also update index of first digit
+    }
+
+    // Iterate through all digits of input string and update result
+    for (; string[i] != '\0'; ++i)
+    {
+        if (isNumericChar(string[i]) == false)
+            return 0; // You may add some lines to write error message
+        // to error stream
+        res = res*10 + string[i] - '0';
+    }
+
+    // Return result with sign
+    return sign*res;
+}
+
+static int isNumericChar(char x){
+    return (x >= '0' && x <= '9')? 1: 0;
 }
 
 
