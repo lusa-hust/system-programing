@@ -8,25 +8,69 @@
 * must be called /dev/ebbchar.
 * @see http://www.derekmolloy.ie/ for a full description and follow-up descriptions.
 */
-#include<stdio.h>
-#include<stdlib.h>
-#include<errno.h>
-#include<fcntl.h>
-#include<string.h>
-#include<unistd.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <string.h>
+#include <unistd.h>
 
 #define BUFFER_LENGTH 256               ///< The buffer length (crude but fine)
 static char receive[BUFFER_LENGTH];     ///< The receive buffer from the LKM
+enum mode_write_e {
+    PUSH = 0, GET = 1
+};
 
 int main(){
-    int ret, fd, n, result;
+    int ret, fd, n, result, action;
+    char key[50], value[50];
+    char buffer[110];
     char stringToSend[BUFFER_LENGTH];
+
     printf("Starting device test code example...\n");
-    fd = open("/dev/ebbchar", O_RDWR);             // Open the device with read/write access
+    fd = open("/dev/ictredis", O_RDWR);             // Open the device with read/write access
     if (fd < 0){
         perror("Failed to open the device...");
         return errno;
     }
+    printf("Opened ictRedis device successfully\n");
+
+    // main loop
+    while(1) {
+        printf("+==================================================+\n");
+        printf("| 1. Write a key-value                             |\n");
+        printf("| 2. Exit                                          |\n");
+        printf("+==================================================+\n");
+        printf("Choose an action: ");
+        scanf("%d", &action);
+
+        switch(action) {
+            case 1:
+                printf("Enter key: ");
+                scanf("%s", key);
+                printf("Enter value: ");
+                scanf("%s", value);
+                // compose the message to send to the device
+                snprintf(buffer, 110, "%d|%s|%s", PUSH, key, value);
+                printf("%s\n", buffer);
+                ret = write(fd, buffer, strlen(buffer));
+                if (ret < 0){
+                    perror("Failed to write the message to the device.");
+                    return errno;
+                }
+            break;
+
+            case 2:
+                printf("Exit\n");
+                close(fd);
+                exit(1);
+            break;
+
+            default:
+                printf("Invalid action\n");
+        }
+    }
+    
     printf("Type in a short string to send to the kernel module:\n");
     scanf("%d", &n);                // Read in a string (with spaces)
     printf("Writing number to the device [%d].\n", n);

@@ -12,6 +12,7 @@
 #include <linux/string.h>
 #include <linux/sched.h>
 #include <linux/vmalloc.h>
+#include <linux/slab.h>
 
 #define  DEVICE_NAME "ictredis"
 #define  CLASS_NAME  "ict"
@@ -214,22 +215,23 @@ static ssize_t dev_write(struct file *filep, const char *buffer, size_t len, lof
     // sprintf(message, "%s(%zu letters)", buffer, len);   // appending received string with its length
     // size_of_message = strlen(message);                 // store the length of the stored message
 
-    char *string = (char *) vmalloc(len);
+    printk(KERN_INFO "ICTRedis: received %s\n", buffer);
+    printk(KERN_INFO "ICTRedis: len = %d\n", len);
+    char *string = (char *) kmalloc(len, GFP_KERNEL);
+    if (string == NULL) {
+        printk(KERN_ALERT "ICTRedis: failed to allocate memory for string\n");
+        return -1;
+    }
     char *orgString = string;
     char *mode, *message;
     strcpy(string, buffer);
-
-
-
 
     mode = strsep(&string, "|");
 
     modeWrite = (ModeWrite) my_atoi(mode);
 
-    message = strsep(&string, "|");
-
     if (modeWrite == PUSH) {
-        Element e = create_elemet(message);
+        Element e = create_elemet(string);
 
         if(max_index + 1 > MAX_ELEMENT) {
             max_index = -1;
@@ -238,12 +240,13 @@ static ssize_t dev_write(struct file *filep, const char *buffer, size_t len, lof
         array[max_index + 1] = e;
         max_index++;
         printk(KERN_INFO "ICTRedis: Received key: %s |value: %s from the user\n", e.key, e.value);
-        vfree(orgString);
+        kfree(orgString);
         return len;
     } else if (modeWrite == GET) {
+        message = strsep(&string, "|");
         strcpy(requestKey, message);
         printk(KERN_INFO "ICTRedis: Received request key: %s from the user\n", requestKey);
-        vfree(orgString);
+        kfree(orgString);
         return len;
     }
 
@@ -269,12 +272,14 @@ static Element create_elemet(char *string) {
     Element ret;
     char *key, *value;
     size_t len = strlen(string);
-    char *buff = (char *) vmalloc(len);
+    printk(KERN_INFO "ICTRedis: string = %s\n", string);
+    char *buff = (char *) kmalloc(len, GFP_KERNEL);
+    if (buff == NULL) {
+        printk(KERN_ALERT "Cannot allocate memory for buff in create_elemet\n");
+        return ret;
+    }
     char *orgBuff = buff;
     strcpy(buff, string);
-
-
-
 
     key = strsep(&buff, "|");
 
@@ -283,7 +288,7 @@ static Element create_elemet(char *string) {
     strcpy(ret.key, key);
     strcpy(ret.value, value);
 
-    vfree(orgBuff);
+    kfree(orgBuff);
     return ret;
 }
 
