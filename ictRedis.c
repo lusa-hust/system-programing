@@ -58,11 +58,14 @@ static ssize_t dev_read(struct file *, char *, size_t, loff_t *);
 
 static ssize_t dev_write(struct file *, const char *, size_t, loff_t *);
 
-static Element create_elemet(char *string);
+static Element create_element(char *string);
 
-static int my_atoi(char * string);
+static int my_atoi(char *string);
 
 static int isNumericChar(char x);
+
+static int findKey(char *key);
+
 /// A macro that is used to declare a new mutex that is visible in this file
 /// results in a semaphore variable ICTRedis_mutex with value 1 (unlocked)
 /// DEFINE_MUTEX_LOCKED() results in a variable with value 0 (locked)
@@ -167,12 +170,13 @@ static int dev_open(struct inode *inodep, struct file *filep) {
 static ssize_t dev_read(struct file *filep, char *buffer, size_t len, loff_t *offset) {
     int error_count = 0;
     int index;
+    int found;
 
     if (max_index < 0 || modeWrite != GET) {
         // copy_to_user has the format ( * to, *from, size) and returns 0 on success
         int number = 0;
         error_count = copy_to_user((int *) buffer, &number, sizeof(int));
-        if(modeWrite == GET) {
+        if (modeWrite == GET) {
             printk(KERN_ALERT "ICTRedis: request key : %s not found \n", requestKey);
         } else {
             printk(KERN_ALERT "ICTRedis: need request key first\n");
@@ -182,14 +186,14 @@ static ssize_t dev_read(struct file *filep, char *buffer, size_t len, loff_t *of
     }
 
 
+    found = findKey(requestKey);
 
-    for (index = 0; index <= max_index; index++) {
-        if (strcmp(array[index].key, requestKey) == 0)
-
-            error_count = copy_to_user((int *) buffer, array[index].value, strlen(array[index].value)+1);
+    if (found) {
+        error_count = copy_to_user((int *) buffer, array[found].value, strlen(array[found].value) + 1);
 
         if (error_count == 0) {            // if true then have success
-            printk(KERN_INFO "ICTRedis: request key : %s found with value \n", array[index].key, array[index].value);
+            printk(KERN_INFO "ICTRedis: request key : %s found with value \n", array[found].key,
+                   array[found].value);
             return 1;  // clear the position to the start and return 0
         } else {
             printk(KERN_ALERT "ICTRedis: Failed to send %d characters to the user\n", error_count);
@@ -230,28 +234,43 @@ static ssize_t dev_write(struct file *filep, const char *buffer, size_t len, lof
 
     modeWrite = (ModeWrite) my_atoi(mode);
 
-    if (modeWrite == PUSH) {
-        Element e = create_elemet(string);
+    switch(modeWrite) {
+        case PUSH: {
+            Element e = create_element(string);
 
-        if(max_index + 1 > MAX_ELEMENT) {
-            max_index = -1;
+            // check exist key
+            int found = findKey(e.key);
+
+            if(found) {
+                // if exist
+                printk(KERN_ALERT "ICTRedis: Received exist key: %s \n", e.key);
+                kfree(orgString);
+                return len;
+            }
+
+            if (max_index + 1 > MAX_ELEMENT) {
+                // if full
+                max_index = -1;
+            }
+
+            array[max_index + 1] = e;
+            max_index++;
+            printk(KERN_INFO "ICTRedis: Received key: %s |value: %s from the user\n", e.key, e.value);
+            kfree(orgString);
+            return len;
+        };
+        case GET: {
+            strcpy(requestKey, string);
+            printk(KERN_INFO "ICTRedis: Received request key: %s from the user\n", requestKey);
+            kfree(orgString);
+            return len;
         }
-
-        array[max_index + 1] = e;
-        max_index++;
-        printk(KERN_INFO "ICTRedis: Received key: %s |value: %s from the user\n", e.key, e.value);
-        kfree(orgString);
-        return len;
-    } else if (modeWrite == GET) {
-        strcpy(requestKey, string);
-        printk(KERN_INFO "ICTRedis: Received request key: %s from the user\n", requestKey);
-        kfree(orgString);
-        return len;
+        default:
+            printk(KERN_ALERT "ICTRedis: Write error can't get modeWrite\n");
+            return 0;  // clear the position to the start and return 0
     }
 
 
-    printk(KERN_ALERT "ICTRedis: Write error \n", requestKey);
-    return 0;  // clear the position to the start and return 0
 }
 
 /** @brief The device release function that is called whenever the device is closed/released by
@@ -267,14 +286,18 @@ static int dev_release(struct inode *inodep, struct file *filep) {
 
 
 // take string "key|value" to create element
-static Element create_elemet(char *string) {
+static Element create_element(char *string) {
     Element ret;
+    if(string == NULL) {
+        printk(KERN_ALERT "ICTredis: string is NULL in create_element\n");
+        return ret;
+    }
     char *key, *value;
     size_t len = strlen(string);
     printk(KERN_INFO "ICTRedis: string = %s\n", string);
     char *buff = (char *) kmalloc(len, GFP_KERNEL);
     if (buff == NULL) {
-        printk(KERN_ALERT "Cannot allocate memory for buff in create_elemet\n");
+        printk(KERN_ALERT "ICTredis: Cannot allocate memory for buff in create_element\n");
         return ret;
     }
     char *orgBuff = buff;
@@ -291,7 +314,7 @@ static Element create_elemet(char *string) {
     return ret;
 }
 
-static int my_atoi(char * string){
+static int my_atoi(char *string) {
     int res = 0;  // Initialize result
     int sign = 1;  // Initialize sign as positive
     int i = 0;  // Initialize index of first digit
@@ -301,27 +324,44 @@ static int my_atoi(char * string){
 
 
     // If number is negative, then update sign
-    if (string[0] == '-')
-    {
+    if (string[0] == '-') {
         sign = -1;
         i++;  // Also update index of first digit
     }
 
     // Iterate through all digits of input string and update result
-    for (; string[i] != '\0'; ++i)
-    {
+    for (; string[i] != '\0'; ++i) {
         if (isNumericChar(string[i]) == false)
             return 0; // You may add some lines to write error message
         // to error stream
-        res = res*10 + string[i] - '0';
+        res = res * 10 + string[i] - '0';
     }
 
     // Return result with sign
-    return sign*res;
+    return sign * res;
 }
 
-static int isNumericChar(char x){
-    return (x >= '0' && x <= '9')? 1: 0;
+static int isNumericChar(char x) {
+    return (x >= '0' && x <= '9') ? 1 : 0;
+}
+
+
+static int findKey(char *key) {
+    if (key == NULL) {
+        return -1;
+    }
+    int i, found = 0;
+    for (i = 0; i < max_index; i++) {
+        if (strcmp(array[i].key, key) == 0) {
+            found = 1;
+            break;
+        }
+    }
+
+    if (found)
+        return i;
+    else
+        return -1;
 }
 
 
