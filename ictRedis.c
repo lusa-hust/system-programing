@@ -19,7 +19,7 @@
 #define MAX_ELEMENT 50
 
 enum mode_write_e {
-    PUSH = 0, GET = 1
+    PUSH = 0, GET = 1, EDIT = 2, DELETE = 3
 };
 
 typedef enum mode_write_e ModeWrite;
@@ -234,14 +234,14 @@ static ssize_t dev_write(struct file *filep, const char *buffer, size_t len, lof
 
     modeWrite = (ModeWrite) my_atoi(mode);
 
-    switch(modeWrite) {
+    switch (modeWrite) {
         case PUSH: {
             Element e = create_element(string);
 
             // check exist key
             int found = findKey(e.key);
 
-            if(found) {
+            if (found) {
                 // if exist
                 printk(KERN_ALERT "ICTRedis: Received exist key: %s \n", e.key);
                 kfree(orgString);
@@ -255,7 +255,7 @@ static ssize_t dev_write(struct file *filep, const char *buffer, size_t len, lof
 
             array[max_index + 1] = e;
             max_index++;
-            printk(KERN_INFO "ICTRedis: Received key: %s |value: %s from the user\n", e.key, e.value);
+            printk(KERN_INFO "ICTRedis: Add key: %s |value: %s from the user\n", e.key, e.value);
             kfree(orgString);
             return len;
         };
@@ -265,6 +265,45 @@ static ssize_t dev_write(struct file *filep, const char *buffer, size_t len, lof
             kfree(orgString);
             return len;
         }
+
+        case EDIT: {
+            Element e = create_element(string);
+
+            // check exist key
+            int found = findKey(e.key);
+            if (!found) {
+                // key not exist
+                printk(KERN_ALERT "ICTRedis: key: %s not exist to edit\n", e.key);
+                kfree(orgString);
+                return len;
+            }
+
+            array[found] = e;
+
+            printk(KERN_INFO "ICTRedis: Edit key: %s |value: %s from the user\n", e.key, e.value);
+            kfree(orgString);
+            return len;
+        }
+        case DELETE: {
+
+            int found = findKey(string);
+            int index;
+            if (!found) {
+                // key not exist
+                printk(KERN_ALERT "ICTRedis: key: %s not exist to delete\n", string);
+                kfree(orgString);
+                return len;
+            }
+
+            for (index = found; index < max_index; index++) {
+                array[index] = array[index + 1];
+            }
+            printk(KERN_INFO "ICTRedis: Delete key: %s from the user\n", string);
+            kfree(orgString);
+            return len;
+
+        }
+        
         default:
             printk(KERN_ALERT "ICTRedis: Write error can't get modeWrite\n");
             return 0;  // clear the position to the start and return 0
@@ -288,7 +327,7 @@ static int dev_release(struct inode *inodep, struct file *filep) {
 // take string "key|value" to create element
 static Element create_element(char *string) {
     Element ret;
-    if(string == NULL) {
+    if (string == NULL) {
         printk(KERN_ALERT "ICTredis: string is NULL in create_element\n");
         return ret;
     }
