@@ -18,36 +18,40 @@
 #define BUFFER_LENGTH 256               ///< The buffer length (crude but fine)
 static char receive[BUFFER_LENGTH];     ///< The receive buffer from the LKM
 enum mode_write_e {
-    PUSH = 0, GET = 1
+    PUSH = 0, GET = 1, EDIT = 2, DELETE = 3
 };
 
-int main(){
+int main() {
     int ret, fd, n, result, action;
     char key[50], value[50];
     char buffer[110];
     char stringToSend[BUFFER_LENGTH];
 
     printf("Starting device test code example...\n");
-    fd = open("/dev/ictredis", O_RDWR);             // Open the device with read/write access
-    if (fd < 0){
-        perror("Failed to open the device...");
-        return errno;
-    }
-    printf("Opened ictRedis device successfully\n");
 
     // main loop
-    while(1) {
+    while (1) {
         printf("\n\n");
         printf("+==================================================+\n");
-        printf("| 1. Write a key-value                             |\n");
+        printf("| 1. Push a key-value                              |\n");
         printf("| 2. Read a key                                    |\n");
-        printf("| 3. Exit                                          |\n");
+        printf("| 3. Edit a key-value                              |\n");
+        printf("| 4. Delete key-value                              |\n");
+        printf("| 5. Exit                                          |\n");
         printf("+==================================================+\n");
         printf("Choose an action: ");
         scanf("%d", &action);
 
-        switch(action) {
-            case 1:
+        switch (action) {
+            case 1: {
+                // Push
+                fd = open("/dev/ictredis", O_RDWR);             // Open the device with read/write access
+                if (fd < 0) {
+                    perror("Failed to open the device...");
+                    close(fd);
+                    return errno;
+                }
+
                 printf("Enter key: ");
                 scanf("%s", key);
                 printf("Enter value: ");
@@ -55,57 +59,126 @@ int main(){
                 // compose the message to send to the device
                 snprintf(buffer, 110, "%d|%s|%s", PUSH, key, value);
                 ret = write(fd, buffer, strlen(buffer));
-                if (ret < 0){
+                if (ret < 0) {
                     perror("Failed to write the message to the device.");
+                    close(fd);
                     return errno;
                 }
-                printf("Written successfully\n");
-            break;
 
-            case 2:
+                if(ret > 0) {
+                    printf("Push key: %s | value: %s successfully\n", key, value);
+                } else {
+                    printf("key exist ! Fail to push key %s | value: %s ", key, value);
+                }
+
+
+                close(fd);
+            }
+                break;
+
+
+            case 2: {
+                // read
+                fd = open("/dev/ictredis", O_RDWR);             // Open the device with read/write access
+                if (fd < 0) {
+                    perror("Failed to open the device...");
+                    return errno;
+                }
+
+
                 printf("Enter the key you want to read: ");
                 scanf("%s", key);
                 snprintf(buffer, 110, "%d|%s", GET, key);
                 ret = write(fd, buffer, strlen(buffer));
-                if (ret < 0){
+                if (ret < 0) {
                     perror("Failed to write the message to the device.");
+                    close(fd);
                     return errno;
                 }
                 // now read
-                read(fd, value, 50);
-                printf("Read: %s\n", value);
-            break;
+                if (ret == 0) {
+                    printf("Key %s not found with value: %s\n", key);
+                } else {
+                    read(fd, value, 50);
+                    printf("Key %s found with value: %s\n", key, value);
+                }
 
-            case 3:
-                printf("Exit\n");
+
                 close(fd);
+            }
+                break;
+
+            case 3: {
+                // edit
+                fd = open("/dev/ictredis", O_RDWR);             // Open the device with read/write access
+                if (fd < 0) {
+                    perror("Failed to open the device...");
+                    close(fd);
+                    return errno;
+                }
+
+                printf("Enter key need to edit: ");
+                scanf("%s", key);
+                printf("Enter value: ");
+                scanf("%s", value);
+                // compose the message to send to the device
+                snprintf(buffer, 110, "%d|%s|%s", EDIT, key, value);
+                ret = write(fd, buffer, strlen(buffer));
+                if (ret < 0) {
+                    perror("Failed to write the message to the device.");
+                    close(fd);
+                    return errno;
+                }
+
+                if(ret > 0) {
+                    printf("Edit key: %s | value: %s successfully\n", key, value);
+                } else {
+                    printf("key not found ! Fail to edit key %s | value: %s ", key, value);
+                }
+
+                close(fd);
+            }
+
+                break;
+            case 4: {
+                // delete
+                fd = open("/dev/ictredis", O_RDWR);             // Open the device with read/write access
+                if (fd < 0) {
+                    perror("Failed to open the device...");
+                    return errno;
+                }
+
+
+                printf("Enter the key you want to Delete: ");
+                scanf("%s", key);
+                snprintf(buffer, 110, "%d|%s", DELETE, key);
+                ret = write(fd, buffer, strlen(buffer));
+                if (ret < 0) {
+                    perror("Failed to write the message to the device.");
+                    close(fd);
+                    return errno;
+                }
+
+                if(ret > 0) {
+                    printf("Delete key: %s successfully\n", key);
+                } else {
+                    printf("key not found ! Fail to delete key %s ", key);
+                }
+
+                close(fd);
+            }
+
+                break;
+
+            case 5: {
+                printf("Exit\n");
                 exit(1);
-            break;
+            }
 
             default:
                 printf("Invalid action\n");
         }
     }
-    
-    printf("Type in a short string to send to the kernel module:\n");
-    scanf("%d", &n);                // Read in a string (with spaces)
-    printf("Writing number to the device [%d].\n", n);
-    ret = write(fd, (char *) &n, sizeof(n)); // Send the string to the LKM
-    if (ret < 0){
-        perror("Failed to write the message to the device.");
-        return errno;
-    }
 
-    printf("Press ENTER to read back from the device...\n");
-    getchar();
 
-    printf("Reading from the device...\n");
-    ret = read(fd,(char *) &result, sizeof(int));        // Read the response from the LKM
-    if (ret < 0){
-        perror("Failed to read the message from the device.");
-        return errno;
-    }
-    printf("The received message is: [%d]\n", result);
-    printf("End of the program\n");
-    return 0;
 }

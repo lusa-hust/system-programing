@@ -169,10 +169,10 @@ static int dev_open(struct inode *inodep, struct file *filep) {
  */
 static ssize_t dev_read(struct file *filep, char *buffer, size_t len, loff_t *offset) {
     int error_count = 0;
-    int index;
     int found;
 
     if (max_index < 0 || modeWrite != GET) {
+        printk(KERN_ALERT "ICTRedis: max_index = %d \n", max_index);
         // copy_to_user has the format ( * to, *from, size) and returns 0 on success
         int number = 0;
         error_count = copy_to_user((int *) buffer, &number, sizeof(int));
@@ -182,17 +182,18 @@ static ssize_t dev_read(struct file *filep, char *buffer, size_t len, loff_t *of
             printk(KERN_ALERT "ICTRedis: need request key first\n");
         }
 
-        return 0;  // clear the position to the start and return 0
+        return 0;
     }
 
 
     found = findKey(requestKey);
 
-    if (found) {
-        error_count = copy_to_user((int *) buffer, array[found].value, strlen(array[found].value) + 1);
+    if (found != -1) {
+        printk(KERN_ALERT "ICTRedis: in read function: found key \n");
+        error_count = copy_to_user(buffer, array[found].value, strlen(array[found].value) + 1);
 
         if (error_count == 0) {            // if true then have success
-            printk(KERN_INFO "ICTRedis: request key : %s found with value \n", array[found].key,
+            printk(KERN_INFO "ICTRedis: request key : %s found with value %s \n", array[found].key,
                    array[found].value);
             return 1;  // clear the position to the start and return 0
         } else {
@@ -203,7 +204,7 @@ static ssize_t dev_read(struct file *filep, char *buffer, size_t len, loff_t *of
 
 
     printk(KERN_ALERT "ICTRedis: request key : %s not found \n", requestKey);
-    return 0;  // clear the position to the start and return 0
+    return 0;
 }
 
 
@@ -219,8 +220,6 @@ static ssize_t dev_write(struct file *filep, const char *buffer, size_t len, lof
     // sprintf(message, "%s(%zu letters)", buffer, len);   // appending received string with its length
     // size_of_message = strlen(message);                 // store the length of the stored message
 
-    printk(KERN_INFO "ICTRedis: received %s\n", buffer);
-    printk(KERN_INFO "ICTRedis: len = %d\n", len);
     char *string = (char *) kmalloc(len, GFP_KERNEL);
     if (string == NULL) {
         printk(KERN_ALERT "ICTRedis: failed to allocate memory for string\n");
@@ -236,16 +235,19 @@ static ssize_t dev_write(struct file *filep, const char *buffer, size_t len, lof
 
     switch (modeWrite) {
         case PUSH: {
+            printk(KERN_INFO "ICTRedis: in write function with Mode PUSH \n");
             Element e = create_element(string);
 
             // check exist key
             int found = findKey(e.key);
 
-            if (found) {
+            printk(KERN_INFO "ICTRedis: in write function with Mode PUSH found : %d \n", found);
+
+            if (found != -1) {
                 // if exist
                 printk(KERN_ALERT "ICTRedis: Received exist key: %s \n", e.key);
                 kfree(orgString);
-                return len;
+                return 0;
             }
 
             if (max_index + 1 > MAX_ELEMENT) {
@@ -260,6 +262,7 @@ static ssize_t dev_write(struct file *filep, const char *buffer, size_t len, lof
             return len;
         };
         case GET: {
+            printk(KERN_INFO "ICTRedis: in write function with Mode GET \n");
             strcpy(requestKey, string);
             printk(KERN_INFO "ICTRedis: Received request key: %s from the user\n", requestKey);
             kfree(orgString);
@@ -267,15 +270,16 @@ static ssize_t dev_write(struct file *filep, const char *buffer, size_t len, lof
         }
 
         case EDIT: {
+            printk(KERN_INFO "ICTRedis: in write function with Mode EDIT \n");
             Element e = create_element(string);
 
             // check exist key
             int found = findKey(e.key);
-            if (!found) {
+            if (found == -1) {
                 // key not exist
                 printk(KERN_ALERT "ICTRedis: key: %s not exist to edit\n", e.key);
                 kfree(orgString);
-                return len;
+                return 0;
             }
 
             array[found] = e;
@@ -285,25 +289,28 @@ static ssize_t dev_write(struct file *filep, const char *buffer, size_t len, lof
             return len;
         }
         case DELETE: {
-
+            printk(KERN_INFO "ICTRedis: in write function with Mode DELETE \n");
             int found = findKey(string);
             int index;
-            if (!found) {
+            if (found == -1) {
                 // key not exist
                 printk(KERN_ALERT "ICTRedis: key: %s not exist to delete\n", string);
                 kfree(orgString);
-                return len;
+                return 0;
             }
 
             for (index = found; index < max_index; index++) {
                 array[index] = array[index + 1];
             }
+
+            max_index--;
+
             printk(KERN_INFO "ICTRedis: Delete key: %s from the user\n", string);
             kfree(orgString);
             return len;
 
         }
-        
+
         default:
             printk(KERN_ALERT "ICTRedis: Write error can't get modeWrite\n");
             return 0;  // clear the position to the start and return 0
@@ -327,16 +334,17 @@ static int dev_release(struct inode *inodep, struct file *filep) {
 // take string "key|value" to create element
 static Element create_element(char *string) {
     Element ret;
+    char *key, *value;
     if (string == NULL) {
-        printk(KERN_ALERT "ICTredis: string is NULL in create_element\n");
+        printk(KERN_ALERT "ICTRedis: string is NULL in create_element\n");
         return ret;
     }
-    char *key, *value;
+
     size_t len = strlen(string);
     printk(KERN_INFO "ICTRedis: string = %s\n", string);
     char *buff = (char *) kmalloc(len, GFP_KERNEL);
     if (buff == NULL) {
-        printk(KERN_ALERT "ICTredis: Cannot allocate memory for buff in create_element\n");
+        printk(KERN_ALERT "ICTRedis: Cannot allocate memory for buff in create_element\n");
         return ret;
     }
     char *orgBuff = buff;
@@ -386,21 +394,38 @@ static int isNumericChar(char x) {
 
 
 static int findKey(char *key) {
+    int i, found = 0;
     if (key == NULL) {
         return -1;
     }
-    int i, found = 0;
-    for (i = 0; i < max_index; i++) {
+
+    printk(KERN_INFO "ICTRedis: In Function findKey with key to find !%s! and max_index = %d\n", key, max_index);
+
+    if (max_index == -1) {
+        printk(KERN_INFO "ICTRedis: In Function findKey key: !%s! not found \n", key);
+        return -1;
+    }
+
+
+
+
+    for (i = 0; i <= max_index; i++) {
+        printk(KERN_INFO "ICTRedis: compare !%s! with !%s!\n", array[i].key, key);
         if (strcmp(array[i].key, key) == 0) {
+            printk(KERN_INFO "ICTRedis: Found !%s! with !%s!\n", array[i].key, key);
             found = 1;
             break;
         }
     }
 
-    if (found)
+    if (found) {
         return i;
-    else
+    }
+    else {
+        printk(KERN_INFO "ICTRedis: In Function findKey key: !%s! not found \n", key);
         return -1;
+    }
+
 }
 
 
