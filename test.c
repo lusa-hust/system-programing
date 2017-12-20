@@ -53,9 +53,9 @@ int main() {
                 }
 
                 printf("Enter key: ");
-                scanf("%s", key);
+                scanf ("%[^\n]%*c", key);
                 printf("Enter value: ");
-                scanf("%s", value);
+                scanf ("%[^\n]%*c", value);
                 // compose the message to send to the device
                 snprintf(buffer, 110, "%d|%s|%s", PUSH, key, value);
                 ret = write(fd, buffer, strlen(buffer));
@@ -87,7 +87,7 @@ int main() {
 
 
                 printf("Enter the key you want to read: ");
-                scanf("%s", key);
+                scanf ("%[^\n]%*c", key);
                 snprintf(buffer, 110, "%d|%s", GET, key);
                 ret = write(fd, buffer, strlen(buffer));
                 if (ret < 0) {
@@ -97,7 +97,7 @@ int main() {
                 }
                 // now read
                 if (ret == 0) {
-                    printf("Key %s not found with value: %s\n", key);
+                    printf("Key %s not found\n", key);
                 } else {
                     read(fd, value, 50);
                     printf("Key %s found with value: %s\n", key, value);
@@ -118,9 +118,9 @@ int main() {
                 }
 
                 printf("Enter key need to edit: ");
-                scanf("%s", key);
+                scanf ("%[^\n]%*c", key);
                 printf("Enter value: ");
-                scanf("%s", value);
+                scanf ("%[^\n]%*c", value);
                 // compose the message to send to the device
                 snprintf(buffer, 110, "%d|%s|%s", EDIT, key, value);
                 ret = write(fd, buffer, strlen(buffer));
@@ -150,7 +150,7 @@ int main() {
 
 
                 printf("Enter the key you want to Delete: ");
-                scanf("%s", key);
+                scanf ("%[^\n]%*c", key);
                 snprintf(buffer, 110, "%d|%s", DELETE, key);
                 ret = write(fd, buffer, strlen(buffer));
                 if (ret < 0) {
