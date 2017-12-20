@@ -40,8 +40,7 @@ int main() {
         printf("| 5. Exit                                          |\n");
         printf("+==================================================+\n");
         printf("Choose an action: ");
-        scanf("%d", &action);
-
+        scanf("%d%*c", &action);
         switch (action) {
             case 1: {
                 // Push
@@ -49,7 +48,7 @@ int main() {
                 if (fd < 0) {
                     perror("Failed to open the device...");
                     close(fd);
-                    return errno;
+                    break;
                 }
 
                 printf("Enter key: ");
@@ -62,7 +61,7 @@ int main() {
                 if (ret < 0) {
                     perror("Failed to write the message to the device.");
                     close(fd);
-                    return errno;
+                    break;
                 }
 
                 if(ret > 0) {
@@ -82,7 +81,7 @@ int main() {
                 fd = open("/dev/ictredis", O_RDWR);             // Open the device with read/write access
                 if (fd < 0) {
                     perror("Failed to open the device...");
-                    return errno;
+                    break;
                 }
 
 
@@ -93,16 +92,19 @@ int main() {
                 if (ret < 0) {
                     perror("Failed to write the message to the device.");
                     close(fd);
-                    return errno;
+                    break;
                 }
                 // now read
                 if (ret == 0) {
                     printf("Key %s not found\n", key);
                 } else {
-                    read(fd, value, 50);
-                    printf("Key %s found with value: %s\n", key, value);
+                    int rret = read(fd, value, 50);
+                    if (rret <= 0) {
+                        printf("Key %s not found\n", key);
+                    } else {
+                        printf("Key %s found with value: %s\n", key, value);
+                    }
                 }
-
 
                 close(fd);
             }
@@ -114,7 +116,7 @@ int main() {
                 if (fd < 0) {
                     perror("Failed to open the device...");
                     close(fd);
-                    return errno;
+                    break;
                 }
 
                 printf("Enter key need to edit: ");
@@ -127,7 +129,7 @@ int main() {
                 if (ret < 0) {
                     perror("Failed to write the message to the device.");
                     close(fd);
-                    return errno;
+                    break;
                 }
 
                 if(ret > 0) {
@@ -145,7 +147,7 @@ int main() {
                 fd = open("/dev/ictredis", O_RDWR);             // Open the device with read/write access
                 if (fd < 0) {
                     perror("Failed to open the device...");
-                    return errno;
+                    break;
                 }
 
 
@@ -156,7 +158,7 @@ int main() {
                 if (ret < 0) {
                     perror("Failed to write the message to the device.");
                     close(fd);
-                    return errno;
+                    break;
                 }
 
                 if(ret > 0) {
